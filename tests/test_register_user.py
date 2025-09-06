@@ -1,8 +1,9 @@
 import allure
 import pytest
-
 from src import helpers
+from src.api_client import UserAPI
 from src.data import ERROR_MESSAGES
+
 
 @allure.feature("Регистрация пользователя")
 class TestRegisterUser:
@@ -12,19 +13,25 @@ class TestRegisterUser:
     @allure.severity(allure.severity_level.CRITICAL)
     def test_create_unique_user(self):
         user_data = helpers.random_user_data()
-        response = helpers.register_user(
+        response = UserAPI.register(
             user_data["email"],
             user_data["password"],
             user_data["name"]
         )
-        with allure.step("Проверяем код ответа и success"):
-            assert response.status_code == 200
-            assert response.json()["success"] is True
+
+        # Проверяем успешную регистрацию
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+        # Удаляем созданного пользователя после теста
+        access_token = response.json().get("accessToken")
+        delete_response = UserAPI.delete(access_token)
+        assert delete_response.status_code == 202
 
     @allure.title("Регистрация уже существующего пользователя")
     @allure.severity(allure.severity_level.NORMAL)
     def test_create_existing_user(self, create_user):
-        response = helpers.register_user(create_user["email"], create_user["password"], create_user["name"])
+        response = UserAPI.register(create_user["email"], create_user["password"], create_user["name"])
         assert response.status_code == 403
         assert response.json()["message"] == ERROR_MESSAGES["user_exists"]
 
@@ -39,6 +46,6 @@ class TestRegisterUser:
         ]
     )
     def test_create_user_without_required_field(self, email, password, name, missing_field):
-        response = helpers.register_user(email, password, name)
+        response = UserAPI.register(email, password, name)
         assert response.status_code == 403
         assert ERROR_MESSAGES["required_fields"].split()[0] in response.json()["message"]
